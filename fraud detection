@@ -1,0 +1,504 @@
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Main App component for the fraud detection dashboard
+export default function App() {
+  // State to manage the list of transactions
+  const [transactions, setTransactions] = useState([]);
+  // State for the search filter
+  const [search, setSearch] = useState('');
+  // State to handle the loading status of data
+  const [isLoading, setIsLoading] = useState(true);
+  // State to track any errors during data fetching
+  const [error, setError] = useState(null);
+  // State for sorting the transaction table (column, direction)
+  const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'descending' });
+  // State to manage the modal for detailed transaction view
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+
+  // A simulated API call to fetch transaction data
+  useEffect(() => {
+    // Simulate fetching data from an API
+    const fetchTransactions = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+        const mockData = [
+          { id: 'tx_5678', user: 'Olivia', amount: 15000, riskScore: 95, risk: 'High', location: 'Nigeria', device: 'Unknown', timestamp: '2023-10-27T10:00:00Z', notes: 'Large purchase from new location, high risk.', type: 'Purchase', userHistory: [{ type: 'Purchase', amount: 200, timestamp: '2023-10-25T11:00:00Z' }, { type: 'Login', timestamp: '2023-10-26T09:00:00Z' }], riskFactors: ['Unusual amount', 'New location', 'New device'] },
+          { id: 'tx_9101', user: 'Liam', amount: 750, riskScore: 30, risk: 'Low', location: 'USA', device: 'Mobile', timestamp: '2023-10-27T09:55:00Z', notes: 'Standard transaction. No flags.', type: 'Deposit', userHistory: [{ type: 'Purchase', amount: 50, timestamp: '2023-10-24T15:00:00Z' }], riskFactors: ['None'] },
+          { id: 'tx_1123', user: 'Ava', amount: 500, riskScore: 65, risk: 'Medium', location: 'UK', device: 'Laptop', timestamp: '2023-10-27T09:50:00Z', notes: 'Transaction amount slightly higher than usual. Monitor.', type: 'Purchase', userHistory: [{ type: 'Purchase', amount: 100, timestamp: '2023-10-26T14:00:00Z' }], riskFactors: ['Higher than average amount'] },
+          { id: 'tx_4567', user: 'Noah', amount: 3500, riskScore: 88, risk: 'High', location: 'Brazil', device: 'Desktop', timestamp: '2023-10-27T09:45:00Z', notes: 'Sudden high-value transfer to a new beneficiary.', type: 'Transfer', userHistory: [{ type: 'Transfer', amount: 50, timestamp: '2023-10-25T08:00:00Z' }], riskFactors: ['Unusual transaction type', 'High value'] },
+          { id: 'tx_8901', user: 'Isabella', amount: 90, riskScore: 15, risk: 'Low', location: 'USA', device: 'Tablet', timestamp: '2023-10-27T09:40:00Z', notes: 'Regular low-value transaction. No issues.', type: 'Purchase', userHistory: [{ type: 'Purchase', amount: 20, timestamp: '2023-10-24T18:00:00Z' }], riskFactors: ['None'] },
+          { id: 'tx_2345', user: 'Sophia', amount: 2500, riskScore: 78, risk: 'High', location: 'Germany', device: 'Mobile', timestamp: '2023-10-27T09:35:00Z', notes: 'Multiple small transactions in a short period.', type: 'Purchase', userHistory: [{ type: 'Purchase', amount: 10, timestamp: '2023-10-27T09:30:00Z' }, { type: 'Purchase', amount: 5, timestamp: '2023-10-27T09:31:00Z' }], riskFactors: ['Multiple transactions', 'Unusual frequency'] },
+          { id: 'tx_6789', user: 'Mia', amount: 120, riskScore: 40, risk: 'Low', location: 'USA', device: 'Desktop', timestamp: '2023-10-27T09:30:00Z', notes: 'Typical activity. Approved.', type: 'Deposit', userHistory: [{ type: 'Deposit', amount: 150, timestamp: '2023-10-26T12:00:00Z' }], riskFactors: ['None'] },
+          { id: 'tx_1234', user: 'Jackson', amount: 4800, riskScore: 72, risk: 'Medium', location: 'Canada', device: 'Mobile', timestamp: '2023-10-27T09:25:00Z', notes: 'First transaction from this user. Worth a quick review.', type: 'Purchase', userHistory: [], riskFactors: ['New user'] },
+        ];
+        setTransactions(mockData);
+      } catch (e) {
+        setError("Failed to fetch transactions.");
+        console.error("Error fetching transactions:", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchTransactions();
+  }, []);
+
+  // Memoized data for filtering and sorting
+  const filteredAndSortedTransactions = useMemo(() => {
+    let sortedTransactions = [...transactions];
+    // Filter transactions based on the search input
+    if (search) {
+      sortedTransactions = sortedTransactions.filter(tx =>
+        tx.user.toLowerCase().includes(search.toLowerCase()) ||
+        tx.id.toLowerCase().includes(search.toLowerCase()) ||
+        tx.location.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    // Sort transactions based on the sortConfig
+    if (sortConfig.key) {
+      sortedTransactions.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return sortedTransactions;
+  }, [transactions, search, sortConfig]);
+
+  // Handle sorting when a column header is clicked
+  const handleSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Memoized data for the pie chart
+  const riskData = useMemo(() => {
+    const highRiskCount = transactions.filter(t => t.risk === 'High').length;
+    const mediumRiskCount = transactions.filter(t => t.risk === 'Medium').length;
+    const lowRiskCount = transactions.filter(t => t.risk === 'Low').length;
+    return [
+      { name: 'High Risk', value: highRiskCount, color: '#EF4444' },
+      { name: 'Medium Risk', value: mediumRiskCount, color: '#F59E0B' },
+      { name: 'Low Risk', value: lowRiskCount, color: '#22C55E' },
+    ];
+  }, [transactions]);
+
+  // Memoized data for the bar chart
+  const volumeData = useMemo(() => {
+    const hourlyVolume = {};
+    transactions.forEach(tx => {
+      const hour = new Date(tx.timestamp).getHours();
+      hourlyVolume[hour] = (hourlyVolume[hour] || 0) + 1;
+    });
+
+    return Object.keys(hourlyVolume).map(hour => ({
+      hour: `${hour}:00`,
+      volume: hourlyVolume[hour]
+    })).sort((a, b) => parseInt(a.hour) - parseInt(b.hour));
+  }, [transactions]);
+
+  // A helper function to render a single dashboard card
+  const DashboardCard = ({ title, value, className = '' }) => (
+    <motion.div
+      className={`bg-white rounded-2xl shadow-md p-6 flex flex-col items-start justify-center ${className}`}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <h3 className="text-sm font-semibold text-gray-500 uppercase">{title}</h3>
+      <span className="mt-2 text-3xl font-bold text-gray-900">{value}</span>
+    </motion.div>
+  );
+
+  // A component for the custom pie chart
+  const PieChart = ({ data }) => {
+    const total = data.reduce((sum, entry) => sum + entry.value, 0);
+    const radius = 60;
+    const strokeWidth = 10;
+    let cumulativeOffset = 0;
+
+    // Fix: Handle the case where total is 0 to prevent division by zero
+    if (total === 0) {
+      return (
+        <svg width="150" height="150" viewBox="0 0 150 150" className="mx-auto">
+          <circle cx="75" cy="75" r={radius} fill="none" stroke="#e5e7eb" strokeWidth={strokeWidth} />
+        </svg>
+      );
+    }
+
+    return (
+      <svg width="150" height="150" viewBox="0 0 150 150" className="mx-auto">
+        <circle cx="75" cy="75" r={radius} fill="none" stroke="#e5e7eb" strokeWidth={strokeWidth} />
+        {data.map((entry, index) => {
+          const circumference = 2 * Math.PI * radius;
+          const strokeDasharray = `${(entry.value / total) * circumference} ${circumference}`;
+          const strokeDashoffset = -cumulativeOffset;
+          cumulativeOffset += (entry.value / total) * circumference;
+
+          return (
+            <motion.circle
+              key={`pie-slice-${index}`}
+              cx="75"
+              cy="75"
+              r={radius}
+              fill="none"
+              stroke={entry.color}
+              strokeWidth={strokeWidth}
+              strokeDasharray={strokeDasharray}
+              strokeDashoffset={strokeDashoffset}
+              transform="rotate(-90 75 75)"
+              animate={{ strokeDashoffset }}
+              transition={{ duration: 1, ease: 'easeInOut' }}
+              className="transition-all duration-300 ease-in-out"
+            />
+          );
+        })}
+      </svg>
+    );
+  };
+  
+  // A component for a simple custom bar chart
+  const BarChart = ({ data, title, color = '#4F46E5' }) => {
+    // Fix: Handle the case where there is no data or maxVolume is 0 to prevent division by zero
+    const maxVolume = data.length > 0 ? Math.max(...data.map(d => d.volume)) : 0;
+    
+    return (
+      <div className="p-4 rounded-xl shadow-inner bg-gray-50">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">{title}</h4>
+        <div className="h-28 flex items-end space-x-2">
+          {data.map((d, index) => (
+            <motion.div
+              key={index}
+              className="relative w-8 bg-indigo-200 rounded-t-lg"
+              initial={{ height: 0 }}
+              // Fix: Ensure height is 0 if maxVolume is 0 to prevent NaN
+              animate={{ height: `${maxVolume > 0 ? (d.volume / maxVolume) * 100 : 0}%` }}
+              transition={{ duration: 0.5, delay: index * 0.05 }}
+              style={{ backgroundColor: color }}
+            >
+              <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-gray-700">{d.volume}</div>
+            </motion.div>
+          ))}
+        </div>
+        <div className="flex justify-between text-xs text-gray-500 mt-2">
+          {data.map((d, index) => (
+            <span key={index}>{d.hour}</span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 font-sans text-gray-800 antialiased">
+      {/* Sidebar */}
+      <aside className="fixed top-0 left-0 w-64 h-full bg-white shadow-lg p-6 flex flex-col z-50">
+        <div className="flex items-center justify-between pb-6 border-b border-gray-200">
+          <h1 className="text-2xl font-extrabold text-indigo-600">FraudSense</h1>
+          <span className="bg-green-500 h-2 w-2 rounded-full animate-pulse"></span>
+        </div>
+        <nav className="flex-1 mt-8 space-y-2">
+          <a href="#" className="flex items-center p-3 text-sm font-medium text-white bg-indigo-600 rounded-xl transition-colors duration-200 hover:bg-indigo-700">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2.586a1 1 0 01.293-.707L10 9.586l1.707 1.707a1 1 0 01.293.707V17a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293-.293a1 1 0 000-1.414l-7-7z" />
+            </svg>
+            Dashboard
+          </a>
+          <a href="#" className="flex items-center p-3 text-sm font-medium text-gray-600 rounded-xl transition-colors duration-200 hover:bg-gray-100 hover:text-gray-900">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+              <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h1a3 3 0 003-3 2 2 0 012 2v13a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 4a1 1 0 100 2H7a1 1 0 100-2h6z" clipRule="evenodd" />
+            </svg>
+            Transactions
+          </a>
+          <a href="#" className="flex items-center p-3 text-sm font-medium text-gray-600 rounded-xl transition-colors duration-200 hover:bg-gray-100 hover:text-gray-900">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+            Reports
+          </a>
+        </nav>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="ml-64 p-8">
+        <h2 className="text-3xl font-bold text-gray-900">Fraud Detection Dashboard</h2>
+        <p className="mt-1 text-gray-600">Overview of recent transactions and fraud risk levels.</p>
+
+        {/* Dashboard Cards Grid */}
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <DashboardCard title="Total Transactions" value={transactions.length} />
+          <DashboardCard title="High Risk" value={riskData.find(d => d.name === 'High Risk')?.value || 0} className="bg-red-100 border-l-4 border-red-500" />
+          <DashboardCard title="Medium Risk" value={riskData.find(d => d.name === 'Medium Risk')?.value || 0} className="bg-yellow-100 border-l-4 border-yellow-500" />
+          <DashboardCard title="Low Risk" value={riskData.find(d => d.name === 'Low Risk')?.value || 0} className="bg-green-100 border-l-4 border-green-500" />
+        </div>
+
+        {/* Analytics and Transactions Section */}
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Risk Distribution Card */}
+          <div className="lg:col-span-1 bg-white rounded-2xl shadow-md p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Risk Distribution</h3>
+            <div className="flex flex-col items-center justify-center">
+              <PieChart data={riskData} />
+              <div className="mt-4 space-y-2">
+                {riskData.map(d => (
+                  <div key={d.name} className="flex items-center">
+                    <span className="h-3 w-3 rounded-full mr-2" style={{ backgroundColor: d.color }}></span>
+                    <span className="text-sm font-medium">{d.name} ({d.value})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          {/* Transaction Volume Bar Chart */}
+          <div className="lg:col-span-2 bg-white rounded-2xl shadow-md p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Transaction Volume by Hour</h3>
+            <BarChart data={volumeData} title="Hourly Volume" color="#8B5CF6" />
+          </div>
+
+          {/* Transactions Table Card */}
+          <div className="lg:col-span-3 bg-white rounded-2xl shadow-md p-6 overflow-hidden">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">Recent Transactions</h3>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200 w-full md:w-auto"
+                />
+                <button className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-500 rounded-full hover:bg-indigo-600 transition-colors duration-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L6.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Export
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              {isLoading ? (
+                <div className="flex justify-center items-center h-48">
+                  <div className="w-10 h-10 border-4 border-indigo-500 border-dotted rounded-full animate-spin"></div>
+                </div>
+              ) : error ? (
+                <div className="text-center text-red-500 p-8">{error}</div>
+              ) : filteredAndSortedTransactions.length > 0 ? (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <TableHeaderButton onClick={() => handleSort('timestamp')} label="Timestamp" sortConfig={sortConfig} sortKey="timestamp" />
+                      <TableHeaderButton onClick={() => handleSort('user')} label="User" sortConfig={sortConfig} sortKey="user" />
+                      <TableHeaderButton onClick={() => handleSort('amount')} label="Amount ($)" sortConfig={sortConfig} sortKey="amount" />
+                      <TableHeaderButton onClick={() => handleSort('location')} label="Location" sortConfig={sortConfig} sortKey="location" />
+                      <TableHeaderButton onClick={() => handleSort('riskScore')} label="Risk Score" sortConfig={sortConfig} sortKey="riskScore" />
+                      <TableHeaderButton onClick={() => handleSort('risk')} label="Risk Level" sortConfig={sortConfig} sortKey="risk" />
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <motion.tbody
+                    layout
+                    className="bg-white divide-y divide-gray-200"
+                    initial="hidden"
+                    animate="visible"
+                    variants={{
+                      hidden: { opacity: 0 },
+                      visible: {
+                        opacity: 1,
+                        transition: {
+                          staggerChildren: 0.1,
+                        },
+                      },
+                    }}
+                  >
+                    <AnimatePresence>
+                      {filteredAndSortedTransactions.map(tx => (
+                        <motion.tr
+                          key={tx.id}
+                          layout
+                          exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                          variants={{
+                            hidden: { opacity: 0, y: 20 },
+                            visible: { opacity: 1, y: 0 },
+                          }}
+                          className={`
+                            ${tx.risk === 'High' ? 'bg-red-50' : tx.risk === 'Medium' ? 'bg-yellow-50' : 'bg-green-50'}
+                            hover:bg-gray-100 transition-colors duration-200 cursor-pointer
+                          `}
+                          onClick={() => setSelectedTransaction(tx)}
+                        >
+                          <TableCell className="px-6 py-4 text-sm font-medium text-gray-900">{new Date(tx.timestamp).toLocaleString()}</TableCell>
+                          <TableCell className="px-6 py-4 text-sm font-medium text-indigo-600">{tx.user}</TableCell>
+                          <TableCell className="px-6 py-4 text-sm text-gray-700 font-mono">${tx.amount.toLocaleString()}</TableCell>
+                          <TableCell className="px-6 py-4 text-sm text-gray-700">{tx.location}</TableCell>
+                          <TableCell className="px-6 py-4 text-sm font-bold">
+                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
+                                ${tx.risk === 'High' ? 'bg-red-100 text-red-800' : tx.risk === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                              {tx.riskScore}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-6 py-4 text-sm font-semibold">
+                            <span className={`
+                                ${tx.risk === 'High' ? 'text-red-600' : tx.risk === 'Medium' ? 'text-yellow-600' : 'text-green-600'}`}>{tx.risk}</span>
+                          </TableCell>
+                          <TableCell className="px-6 py-4 text-sm font-medium whitespace-nowrap">
+                            <button
+                              className="text-indigo-600 hover:text-indigo-900 mr-4"
+                              onClick={(e) => { e.stopPropagation(); /* handle approve */ }}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="text-red-600 hover:text-red-900"
+                              onClick={(e) => { e.stopPropagation(); /* handle deny */ }}
+                            >
+                              Deny
+                            </button>
+                          </TableCell>
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
+                  </motion.tbody>
+                </table>
+              ) : (
+                <div className="text-center text-gray-500 p-8">No matching transactions found.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Transaction Details Modal */}
+      <AnimatePresence>
+        {selectedTransaction && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedTransaction(null)}
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-8"
+            >
+              <div className="flex items-center justify-between border-b pb-4 mb-4">
+                <h3 className="text-2xl font-bold text-gray-900">Transaction Details</h3>
+                <button onClick={() => setSelectedTransaction(null)} className="text-gray-500 hover:text-gray-900 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-sm">
+                <DetailRow label="Transaction ID" value={selectedTransaction.id} />
+                <DetailRow label="User Name" value={selectedTransaction.user} />
+                <DetailRow label="Amount" value={`$${selectedTransaction.amount.toLocaleString()}`} />
+                <DetailRow label="Transaction Type" value={selectedTransaction.type} />
+                <DetailRow label="Risk Score" value={selectedTransaction.riskScore} />
+                <DetailRow label="Risk Level" value={selectedTransaction.risk} color={
+                  selectedTransaction.risk === 'High' ? 'text-red-600' : selectedTransaction.risk === 'Medium' ? 'text-yellow-600' : 'text-green-600'
+                } />
+                <DetailRow label="Location" value={selectedTransaction.location} />
+                <DetailRow label="Device" value={selectedTransaction.device} />
+                <div className="col-span-1 md:col-span-2">
+                  <DetailRow label="Notes" value={selectedTransaction.notes} />
+                </div>
+              </div>
+
+              {/* Enhanced Modal Content */}
+              <div className="mt-6 border-t pt-6">
+                <h4 className="text-lg font-bold text-gray-900 mb-4">Risk Factors</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTransaction.riskFactors.map((factor, index) => (
+                    <span key={index} className="px-3 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded-full">
+                      {factor}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="mt-6 border-t pt-6">
+                <h4 className="text-lg font-bold text-gray-900 mb-4">User Transaction History</h4>
+                {selectedTransaction.userHistory.length > 0 ? (
+                  <ul className="space-y-3 text-sm">
+                    {selectedTransaction.userHistory.map((history, index) => (
+                      <li key={index} className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
+                        <span className="font-medium text-gray-700">{history.type}</span>
+                        <span className="text-gray-500 font-mono">${history.amount?.toLocaleString() || '--'}</span>
+                        <span className="text-gray-500">{new Date(history.timestamp).toLocaleString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-gray-500">No previous transaction history found for this user.</p>
+                )}
+              </div>
+
+              <div className="mt-8 flex justify-end space-x-4">
+                <button className="px-6 py-3 bg-red-600 text-white rounded-xl shadow-md hover:bg-red-700 transition-colors duration-200">
+                  Deny Transaction
+                </button>
+                <button className="px-6 py-3 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700 transition-colors duration-200">
+                  Approve Transaction
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Custom table header button with sorting icons
+const TableHeaderButton = ({ onClick, label, sortConfig, sortKey }) => {
+  const getSortIcon = () => {
+    if (sortConfig.key !== sortKey) {
+      return null;
+    }
+    return sortConfig.direction === 'ascending' ? '▲' : '▼';
+  };
+  return (
+    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none" onClick={onClick}>
+      <span className="flex items-center">
+        {label}
+        <span className="ml-2 text-gray-400">
+          {getSortIcon()}
+        </span>
+      </span>
+    </th>
+  );
+};
+
+// Custom component for a detail row in the modal
+const DetailRow = ({ label, value, color = 'text-gray-900' }) => (
+  <div className="flex flex-col">
+    <span className="font-medium text-gray-500">{label}</span>
+    <span className={`mt-1 font-semibold ${color}`}>{value}</span>
+  </div>
+);
+
+// A simple TableCell component for consistency
+const TableCell = ({ children, className = '' }) => (
+  <td className={`px-6 py-4 whitespace-nowrap ${className}`}>
+    {children}
+  </td>
+);
